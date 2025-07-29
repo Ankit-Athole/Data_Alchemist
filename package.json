@@ -1,0 +1,28 @@
+{
+  "name": "data_alchemist_full",
+  "version": "1.0.0",
+  "description": "Upload messy CSV/XLSX → clean → edit → validate → build AI rules → export. ```bash npm install echo \"OPENAI_API_KEY=sk-...\" > .env.local npm run dev ```",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/jszip": "^3.4.0",
+    "@types/node": "^24.1.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "jszip": "^3.10.1",
+    "next": "^15.4.4",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-dropzone": "^14.3.8",
+    "typescript": "^5.8.3",
+    "xlsx": "^0.18.5"
+  }
+}

@@ -1,0 +1,35 @@
+# Node
+node_modules/
+
+# Next.js build output
+.next/
+
+# Production build
+out/
+
+# Local env files
+.env*
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# TypeScript
+*.tsbuildinfo
+
+# Misc
+coverage/
+
+# Optional: lock files (uncomment if you want to ignore lock files)
+# package-lock.json
+# yarn.lock 
