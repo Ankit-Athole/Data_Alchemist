@@ -18,10 +18,16 @@ export async function searchDataWithNLP(
       body: JSON.stringify({ query, clients, workers, tasks })
     });
     
-    if (!response.ok) return null;
+    if (!response.ok) {
+      // If AI search fails, fall back to simple search
+      console.log('AI search failed, using fallback search');
+      return simpleSearch(query, clients, workers, tasks);
+    }
+    
     return await response.json();
-  } catch {
-    return null;
+  } catch (error) {
+    console.log('Search error, using fallback:', error);
+    return simpleSearch(query, clients, workers, tasks);
   }
 }
 

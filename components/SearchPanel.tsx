@@ -35,11 +35,12 @@ export default function SearchPanel({ clients, workers, tasks, onSearchResult }:
         });
       }
     } catch (error) {
+      console.error('Search error:', error);
       setLastResult({
         entity: 'tasks',
         data: [],
         query,
-        explanation: 'Search failed. Please try a different query.'
+        explanation: 'Search failed. Using fallback search. Try queries like "high priority clients" or "workers with frontend skills".'
       });
     } finally {
       setIsSearching(false);

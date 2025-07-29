@@ -62,6 +62,25 @@ Example queries:
 
   } catch (error: any) {
     console.error('[NLP-SEARCH]', error.message);
-    res.status(500).json({ error: 'Search failed' });
+    
+    // Handle specific OpenAI errors
+    if (error.message.includes('429')) {
+      return res.status(429).json({ 
+        error: 'OpenAI API quota exceeded. Please check your billing or try again later.',
+        details: 'You can still use the basic search features without AI.'
+      });
+    }
+    
+    if (error.message.includes('401')) {
+      return res.status(401).json({ 
+        error: 'Invalid OpenAI API key. Please check your environment variables.',
+        details: 'Make sure OPENAI_API_KEY is set correctly.'
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Search failed', 
+      details: error.message 
+    });
   }
 } 
