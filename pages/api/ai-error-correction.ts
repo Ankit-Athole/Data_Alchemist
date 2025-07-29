@@ -60,6 +60,25 @@ Common error types and fixes:
 
   } catch (error: any) {
     console.error('[AI-ERROR-CORRECTION]', error.message);
-    res.status(500).json({ error: 'Error correction failed' });
+    
+    // Handle specific OpenAI errors
+    if (error.message.includes('429')) {
+      return res.status(429).json({ 
+        error: 'OpenAI API quota exceeded. Please check your billing or try again later.',
+        details: 'You can still fix errors manually in the data grids.'
+      });
+    }
+    
+    if (error.message.includes('401')) {
+      return res.status(401).json({ 
+        error: 'Invalid OpenAI API key. Please check your environment variables.',
+        details: 'Make sure OPENAI_API_KEY is set correctly.'
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Error correction failed', 
+      details: error.message 
+    });
   }
 } 

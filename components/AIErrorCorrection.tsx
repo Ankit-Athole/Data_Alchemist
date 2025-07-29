@@ -25,6 +25,7 @@ export default function AIErrorCorrection({ errors, clients, workers, tasks, onA
       }
     } catch (error) {
       console.error('Error correction failed:', error);
+      alert('AI error correction failed. Using fallback suggestions. You can still fix errors manually.');
     } finally {
       setIsAnalyzing(false);
     }

@@ -23,6 +23,7 @@ export default function AIRecommendations({ clients, workers, tasks, onAddRule }
       }
     } catch (error) {
       console.error('Analysis failed:', error);
+      alert('AI recommendations failed. Using fallback analysis. You can still create rules manually.');
     } finally {
       setIsAnalyzing(false);
     }
