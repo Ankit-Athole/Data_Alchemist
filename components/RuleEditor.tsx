@@ -50,6 +50,8 @@ export default function RuleEditor({ tasks, clients, workers }: Props) {
       }
     } catch (error) {
       console.error('Failed to generate rule:', error);
+      // Show user-friendly error message
+      alert('Rule generation failed. Using fallback rule creation. You can edit the rule manually.');
     } finally {
       setIsGenerating(false);
     }

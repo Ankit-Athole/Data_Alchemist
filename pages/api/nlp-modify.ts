@@ -61,6 +61,25 @@ Example commands:
 
   } catch (error: any) {
     console.error('[NLP-MODIFY]', error.message);
-    res.status(500).json({ error: 'Modification failed' });
+    
+    // Handle specific OpenAI errors
+    if (error.message.includes('429')) {
+      return res.status(429).json({ 
+        error: 'OpenAI API quota exceeded. Please check your billing or try again later.',
+        details: 'You can still modify data manually in the data grids.'
+      });
+    }
+    
+    if (error.message.includes('401')) {
+      return res.status(401).json({ 
+        error: 'Invalid OpenAI API key. Please check your environment variables.',
+        details: 'Make sure OPENAI_API_KEY is set correctly.'
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Modification failed', 
+      details: error.message 
+    });
   }
 } 
