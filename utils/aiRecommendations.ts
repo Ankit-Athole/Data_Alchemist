@@ -56,10 +56,10 @@ export function generateSimpleRecommendations(
   
   // Analyze workers for load patterns
   const workerGroups = workers.map(w => w.WorkerGroup);
-  const groupCounts = workerGroups.reduce((acc, group) => {
-    acc[group] = (acc[group] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const groupCounts: Record<string, number> = {};
+  workerGroups.forEach(group => {
+    groupCounts[group] = (groupCounts[group] || 0) + 1;
+  });
   
   Object.entries(groupCounts).forEach(([group, count]) => {
     if (count > 2) {
