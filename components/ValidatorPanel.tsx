@@ -7,6 +7,7 @@ interface Props {
   tasks: any[];
   errors: string[];
   setErrors: (e: string[]) => void;
+  setStructuredErrors?: (e: any[]) => void;
   highlightedRow?: { entity: string; row: number } | null;
   setHighlightedRow?: (row: { entity: string; row: number } | null) => void;
 }
@@ -17,6 +18,7 @@ export default function ValidatorPanel({
   tasks, 
   errors, 
   setErrors,
+  setStructuredErrors,
   highlightedRow,
   setHighlightedRow 
 }: Props) {
@@ -27,7 +29,10 @@ export default function ValidatorPanel({
     const validationErrors = validateData(clients, workers, tasks);
     setDetailedErrors(validationErrors);
     setErrors(validationErrors.map(e => `${e.entity} ${e.row !== undefined ? `(row ${e.row + 1})` : ''}: ${e.message}`));
-  }, [clients, workers, tasks, setErrors]);
+    if (setStructuredErrors) {
+      setStructuredErrors(validationErrors);
+    }
+  }, [clients, workers, tasks, setErrors, setStructuredErrors]);
 
   const getErrorColor = (type: string) => {
     switch (type) {

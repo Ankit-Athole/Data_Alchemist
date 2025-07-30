@@ -5,6 +5,8 @@ interface Props {
   tasks: any[]; 
   clients: any[]; 
   workers: any[]; 
+  rules?: any[];
+  setRules?: (rules: any[]) => void;
 }
 
 interface Rule {
@@ -16,11 +18,13 @@ interface Rule {
   priority: number;
 }
 
-export default function RuleEditor({ tasks, clients, workers }: Props) {
+export default function RuleEditor({ tasks, clients, workers, rules: externalRules, setRules: setExternalRules }: Props) {
   const [text, setText] = useState('');
-  const [rules, setRules] = useState<Rule[]>([]);
+  const [localRules, setLocalRules] = useState<Rule[]>([]);
   const [selectedRuleType, setSelectedRuleType] = useState('coRun');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [aiStatus, setAiStatus] = useState<'idle' | 'loading' | 'success' | 'failed' | 'fallback'>('idle');
+  const [aiMessage, setAiMessage] = useState('');
 
   const ruleTypes = [
     { id: 'coRun', name: 'Co-run Rule', color: '#6366f1' },
@@ -34,52 +38,114 @@ export default function RuleEditor({ tasks, clients, workers }: Props) {
   const addRule = async () => {
     if (!text.trim()) return;
     setIsGenerating(true);
+    setAiStatus('loading');
+    setAiMessage('Trying AI-powered rule generation...');
+    
     try {
       const rule = await generateRuleFromText(text, tasks, clients, workers);
       if (rule) {
+        setAiStatus('success');
+        setAiMessage('AI rule generation successful!');
         const newRule: Rule = {
           id: Date.now().toString(),
           type: selectedRuleType,
-          name: `Rule ${rules.length + 1}`,
+          name: `Rule ${(externalRules?.length || 0) + (localRules.length) + 1}`,
           description: text,
           config: rule,
-          priority: rules.length + 1
+          priority: (externalRules?.length || 0) + (localRules.length) + 1
         };
-        setRules(r => [...r, newRule]);
-    setText('');
+        if (setExternalRules) {
+          setExternalRules([...(externalRules || []), { rule: text, type: 'ai-generated', priority: 1 }]);
+        } else {
+          setLocalRules(r => [...r, newRule]);
+        }
+        setText('');
+      } else {
+        setAiStatus('fallback');
+        setAiMessage('AI unavailable, using rule-based fallback...');
+        // Create a simple fallback rule
+        const fallbackRule: Rule = {
+          id: Date.now().toString(),
+          type: selectedRuleType,
+          name: `Rule ${(externalRules?.length || 0) + (localRules.length) + 1}`,
+          description: text,
+          config: {
+            type: 'custom',
+            description: text,
+            note: 'This rule was created using fallback. You may need to edit it manually.'
+          },
+          priority: (externalRules?.length || 0) + (localRules.length) + 1
+        };
+        if (setExternalRules) {
+          setExternalRules([...(externalRules || []), { rule: text, type: 'fallback-generated', priority: 1 }]);
+        } else {
+          setLocalRules(r => [...r, fallbackRule]);
+        }
+        setText('');
+        setAiMessage('Fallback rule created successfully!');
       }
     } catch (error) {
       console.error('Failed to generate rule:', error);
-      // Show user-friendly error message
-      alert('Rule generation failed. Using fallback rule creation. You can edit the rule manually.');
+      setAiStatus('failed');
+      setAiMessage('Rule generation failed. Using fallback rule creation. You can edit the rule manually.');
+      // Create a simple fallback rule
+      const fallbackRule: Rule = {
+        id: Date.now().toString(),
+        type: selectedRuleType,
+        name: `Rule ${(externalRules?.length || 0) + (localRules.length) + 1}`,
+        description: text,
+        config: {
+          type: 'custom',
+          description: text,
+          note: 'This rule was created using fallback. You may need to edit it manually.'
+        },
+        priority: (externalRules?.length || 0) + (localRules.length) + 1
+      };
+      if (setExternalRules) {
+        setExternalRules([...(externalRules || []), { rule: text, type: 'fallback-generated', priority: 1 }]);
+      } else {
+        setLocalRules(r => [...r, fallbackRule]);
+      }
+      setText('');
     } finally {
       setIsGenerating(false);
     }
   };
 
   const removeRule = (id: string) => {
-    setRules(r => r.filter(rule => rule.id !== id));
+    if (setExternalRules && externalRules) {
+      setExternalRules(externalRules.filter((rule: any) => rule.id !== id));
+    } else {
+      setLocalRules(r => r.filter(rule => rule.id !== id));
+    }
   };
 
   const updateRulePriority = (id: string, newPriority: number) => {
-    setRules(r => r.map(rule => 
-      rule.id === id ? { ...rule, priority: newPriority } : rule
-    ));
+    if (setExternalRules && externalRules) {
+      setExternalRules(externalRules.map((rule: any) => 
+        rule.id === id ? { ...rule, priority: newPriority } : rule
+      ));
+    } else {
+      setLocalRules(r => r.map(rule => 
+        rule.id === id ? { ...rule, priority: newPriority } : rule
+      ));
+    }
   };
 
   const exportRules = () => {
+    const allRules = [...(externalRules || []), ...localRules];
     const rulesConfig = {
-      rules: rules.map(rule => ({
-        type: rule.type,
-        name: rule.name,
-        description: rule.description,
-        config: rule.config,
-        priority: rule.priority
+      rules: allRules.map((rule: any) => ({
+        type: rule.type || 'custom',
+        name: rule.name || rule.rule || 'Rule',
+        description: rule.description || rule.rule || '',
+        config: rule.config || { type: 'custom', description: rule.rule || '' },
+        priority: rule.priority || 1
       })),
       metadata: {
         generatedAt: new Date().toISOString(),
-        totalRules: rules.length,
-        ruleTypes: Array.from(new Set(rules.map(r => r.type)))
+        totalRules: allRules.length,
+        ruleTypes: Array.from(new Set(allRules.map((r: any) => r.type || 'custom')))
       }
     };
     const blob = new Blob([JSON.stringify(rulesConfig, null, 2)], { type: 'application/json' });
@@ -95,7 +161,7 @@ export default function RuleEditor({ tasks, clients, workers }: Props) {
     <div style={{display: 'flex', flexDirection: 'column', gap: '2rem'}}>
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem'}}>
         <h3 style={{fontWeight: 700, fontSize: '1.25rem'}}>🤖 AI Rule Builder</h3>
-        <button onClick={exportRules} disabled={rules.length === 0} style={{
+        <button onClick={exportRules} disabled={(externalRules?.length || 0) + localRules.length === 0} style={{
           background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)',
           color: 'white',
           border: 'none',
@@ -103,8 +169,8 @@ export default function RuleEditor({ tasks, clients, workers }: Props) {
           padding: '0.5rem 1.25rem',
           fontWeight: 600,
           fontSize: '1rem',
-          cursor: rules.length === 0 ? 'not-allowed' : 'pointer',
-          opacity: rules.length === 0 ? 0.5 : 1
+          cursor: (externalRules?.length || 0) + localRules.length === 0 ? 'not-allowed' : 'pointer',
+          opacity: (externalRules?.length || 0) + localRules.length === 0 ? 0.5 : 1
         }}>📥 Export Rules</button>
       </div>
       <div style={{display: 'flex', flexDirection: 'column', gap: '1.5rem'}}>
@@ -160,10 +226,78 @@ export default function RuleEditor({ tasks, clients, workers }: Props) {
             <span style={{background: '#f3f4f6', borderRadius: '0.5rem', padding: '0.5rem 1rem', color: '#ef4444', fontWeight: 600}}>High priority clients get precedence</span>
           </div>
         </div>
-        {rules.length > 0 && (
+        
+        {/* AI Status */}
+        {aiStatus !== 'idle' && (
+          <div style={{ 
+            padding: '1rem 1.5rem',
+            borderRadius: '1rem',
+            background: aiStatus === 'loading' ? 'linear-gradient(90deg, #fef3c7 0%, #fde68a 100%)' :
+                       aiStatus === 'success' ? 'linear-gradient(90deg, #d1fae5 0%, #a7f3d0 100%)' :
+                       aiStatus === 'fallback' ? 'linear-gradient(90deg, #dbeafe 0%, #bfdbfe 100%)' :
+                       'linear-gradient(90deg, #fee2e2 0%, #fecaca 100%)',
+            border: aiStatus === 'loading' ? '2px solid #f59e0b' :
+                   aiStatus === 'success' ? '2px solid #10b981' :
+                   aiStatus === 'fallback' ? '2px solid #3b82f6' :
+                   '2px solid #ef4444',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem',
+            marginBottom: '1rem'
+          }}>
+            <span style={{ 
+              fontSize: '1.5rem',
+              opacity: aiStatus === 'loading' ? 0.8 : 1
+            }}>
+              {aiStatus === 'loading' ? '⏳' :
+               aiStatus === 'success' ? '✅' :
+               aiStatus === 'fallback' ? '🔄' :
+               '❌'}
+            </span>
+            <div style={{ flex: 1 }}>
+              <div style={{ 
+                fontWeight: 700, 
+                fontSize: '1.1rem',
+                color: aiStatus === 'loading' ? '#92400e' :
+                       aiStatus === 'success' ? '#065f46' :
+                       aiStatus === 'fallback' ? '#1e40af' :
+                       '#991b1b',
+                marginBottom: '0.25rem'
+              }}>
+                {aiStatus === 'loading' ? 'AI Processing...' :
+                 aiStatus === 'success' ? 'AI Rule Generation Successful' :
+                 aiStatus === 'fallback' ? 'Using Fallback Rule Creation' :
+                 'Rule Generation Failed'}
+              </div>
+              <div style={{ 
+                fontSize: '0.95rem',
+                color: aiStatus === 'loading' ? '#a16207' :
+                       aiStatus === 'success' ? '#047857' :
+                       aiStatus === 'fallback' ? '#1d4ed8' :
+                       '#dc2626'
+              }}>
+                {aiMessage}
+              </div>
+            </div>
+            {aiStatus === 'fallback' && (
+              <div style={{
+                background: 'rgba(59, 130, 246, 0.1)',
+                color: '#1e40af',
+                padding: '0.5rem 1rem',
+                borderRadius: '0.5rem',
+                fontSize: '0.85rem',
+                fontWeight: 600
+              }}>
+                Rule-Based
+              </div>
+            )}
+          </div>
+        )}
+        
+        {(externalRules?.length || 0) + localRules.length > 0 && (
           <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
-            <h4 style={{fontWeight: 700, color: '#6366f1'}}>Active Rules ({rules.length}):</h4>
-            {rules.sort((a, b) => a.priority - b.priority).map((rule, index) => (
+            <h4 style={{fontWeight: 700, color: '#6366f1'}}>Active Rules ({(externalRules?.length || 0) + localRules.length}):</h4>
+            {[...(externalRules || []), ...localRules].sort((a: any, b: any) => (a.priority || 1) - (b.priority || 1)).map((rule: any, index: number) => (
               <div key={rule.id} style={{
                 background: '#f9fafb',
                 border: '1px solid #e5e7eb',
@@ -180,24 +314,44 @@ export default function RuleEditor({ tasks, clients, workers }: Props) {
                     <span style={{background: '#e0e7ef', color: '#6366f1', borderRadius: '0.5rem', padding: '0.25rem 0.75rem', fontWeight: 600, fontSize: '0.875rem'}}>Priority: {rule.priority}</span>
                   </div>
                   <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                    <select value={rule.priority} onChange={e => updateRulePriority(rule.id, parseInt(e.target.value))} style={{fontSize: '0.875rem', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '0.25rem 0.5rem'}}>
-                      {rules.map((_, i) => (
+                    <select value={rule.priority || 1} onChange={e => updateRulePriority(rule.id || index.toString(), parseInt(e.target.value))} style={{fontSize: '0.875rem', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '0.25rem 0.5rem'}}>
+                      {Array.from({ length: (externalRules?.length || 0) + localRules.length }, (_, i: number) => (
                         <option key={i + 1} value={i + 1}>{i + 1}</option>
                       ))}
                     </select>
                     <button onClick={() => removeRule(rule.id)} style={{color: '#ef4444', background: 'none', border: 'none', fontSize: '1.25rem', cursor: 'pointer'}}>✕</button>
                   </div>
                 </div>
-                <div style={{color: '#64748b', fontWeight: 500, marginBottom: '0.5rem'}}>{rule.description}</div>
+                <div style={{color: '#64748b', fontWeight: 500, marginBottom: '0.5rem'}}>
+                  {rule.description || rule.rule}
+                  {rule.type === 'ai-recommended' && (
+                    <span style={{background: '#10b981', color: 'white', borderRadius: '0.25rem', padding: '0.125rem 0.5rem', fontSize: '0.75rem', marginLeft: '0.5rem'}}>AI</span>
+                  )}
+                  {rule.type === 'ai-generated' && (
+                    <span style={{background: '#3b82f6', color: 'white', borderRadius: '0.25rem', padding: '0.125rem 0.5rem', fontSize: '0.75rem', marginLeft: '0.5rem'}}>AI-Generated</span>
+                  )}
+                  {rule.type === 'fallback-generated' && (
+                    <span style={{background: '#f59e0b', color: 'white', borderRadius: '0.25rem', padding: '0.125rem 0.5rem', fontSize: '0.75rem', marginLeft: '0.5rem'}}>Fallback</span>
+                  )}
+                </div>
                 <details style={{fontSize: '0.85rem'}}>
                   <summary style={{cursor: 'pointer', color: '#3b82f6', fontWeight: 600}}>View JSON Config</summary>
-                  <pre style={{marginTop: '0.5rem', background: 'white', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '0.75rem', fontSize: '0.85rem', overflow: 'auto'}}>{JSON.stringify(rule.config, null, 2)}</pre>
+                  <pre style={{marginTop: '0.5rem', background: 'white', border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '0.75rem', fontSize: '0.85rem', overflow: 'auto'}}>
+                    {JSON.stringify(rule.config || {
+                      type: rule.type || 'custom',
+                      description: rule.rule || rule.description || 'No description available',
+                      priority: rule.priority || 1,
+                      id: rule.id || 'unknown',
+                      category: rule.type === 'ai-recommended' ? 'ai-generated' : 'manual',
+                      timestamp: new Date().toISOString()
+                    }, null, 2)}
+                  </pre>
                 </details>
               </div>
             ))}
           </div>
         )}
-        {rules.length === 0 && (
+        {(externalRules?.length || 0) + localRules.length === 0 && (
           <div style={{textAlign: 'center', color: '#64748b', padding: '2rem 0'}}>
             <div style={{fontSize: '2rem', marginBottom: '0.5rem'}}>🤖</div>
             <div>No rules created yet. Start by describing a rule above!</div>

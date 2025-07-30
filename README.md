@@ -99,12 +99,25 @@ T1,Build UI,Frontend,2,"frontend","[1,2]",2
 - Suggests co-run rules for frequently paired tasks
 - Identifies overloaded workers and suggests load limits
 - Recommends precedence rules based on priority patterns
+- **Add to Rules**: One-click integration of AI recommendations into rule set
+- **Rule Type Badges**: Visual indicators for AI-recommended vs manually created rules
+- **JSON Configuration**: Detailed configuration display for all rule types
 
 ### AI Error Correction
 - Suggests fixes for validation errors
 - Provides confidence levels for each suggestion
 - Offers alternative solutions when available
 - Explains reasoning behind each correction
+- **Apply Fix Feature**: One-click application of AI-suggested fixes
+- **Error Details Modal**: Comprehensive view of validation errors and data context
+
+### AI Status Dashboard
+- **Real-time Status**: Shows AI processing, success, or fallback status
+- **Transparent Feedback**: Users know exactly what's happening with AI requests
+- **Fallback Indication**: Clear indication when using rule-based fallback vs AI
+- **Helpful Messages**: Guides users on what to try when AI is unavailable
+- **Visual Indicators**: Color-coded status bars with icons and badges
+- **Provider Information**: Shows which AI provider is currently active
 
 ## 🎨 UI Features
 
@@ -115,6 +128,7 @@ T1,Build UI,Frontend,2,"frontend","[1,2]",2
 - **Tab Navigation**: Organized sections for different features
 - **Milestone 3 Tab**: Dedicated section for advanced AI features
 - **AI-Powered Components**: Specialized interfaces for data modification, recommendations, and error correction
+- **AI Status Dashboard**: Real-time status indicators showing AI processing, success, fallback, or error states
 
 ## ✅ Validation Features
 
@@ -171,9 +185,11 @@ T1,Build UI,Frontend,2,"frontend","[1,2]",2
 
 - **Frontend**: Next.js 15, React 18, TypeScript
 - **Styling**: Custom CSS with modern techniques (Grid, Flexbox, CSS Variables)
-- **AI Integration**: OpenAI GPT-4
+- **AI Integration**: Multi-provider support (OpenAI GPT-4, Google Gemini, Hugging Face)
+- **AI Status Management**: Real-time dashboard with fallback systems
 - **File Processing**: XLSX, react-dropzone
 - **Data Export**: JSZip for multi-file exports
+- **Error Handling**: Graceful fallback mechanisms for AI failures
 
 ## 📁 Project Structure
 
@@ -211,14 +227,18 @@ data_alchemist/
 │   └── globals.css          # Global CSS with custom styling
 │
 ├── 📁 utils/                # Utility functions and helpers
+│   ├── aiConfig.ts          # Centralized AI provider configuration
 │   ├── aiErrorCorrection.ts # AI error correction logic
 │   ├── aiRecommendations.ts # AI recommendations engine
+│   ├── geminiAI.ts          # Google Gemini AI integration
+│   ├── huggingFaceAI.ts     # Hugging Face AI integration
 │   ├── nlpModify.ts         # Natural language modification
 │   ├── nlpSearch.ts         # Natural language search
 │   ├── nlpToRule.ts         # Convert natural language to rules
 │   ├── parseHeaders.ts       # CSV/Excel header parsing
 │   └── validateData.ts      # Data validation logic
 │
+├── AI_SETUP.md             # AI provider setup and configuration guide
 ├── package.json             # Dependencies and scripts
 ├── next.config.js           # Next.js configuration
 ├── tsconfig.json            # TypeScript configuration
@@ -247,8 +267,11 @@ data_alchemist/
 - **nlp-search.ts**: Natural language search functionality
 
 #### **Utils** (`/utils/`)
+- **aiConfig.ts**: Centralized AI provider configuration and selection
 - **aiErrorCorrection.ts**: Core logic for AI error correction
 - **aiRecommendations.ts**: AI recommendation engine implementation
+- **geminiAI.ts**: Google Gemini AI integration with multi-model support
+- **huggingFaceAI.ts**: Hugging Face AI integration for free tier usage
 - **nlpModify.ts**: Natural language data modification logic
 - **nlpSearch.ts**: Search query processing and execution
 - **nlpToRule.ts**: Rule conversion from natural language
@@ -274,11 +297,38 @@ data_alchemist/
 - **Multiple Export Formats**: Choose the right format for your needs
 - **AI Assistance**: Get smart suggestions and recommendations
 
+## 🤖 AI Provider Setup
+
+### Supported Providers
+- **OpenAI GPT-4**: Primary AI provider with advanced reasoning capabilities
+- **Google Gemini**: Alternative provider with good performance and free tier
+- **Hugging Face**: Free tier provider for basic AI features
+- **Rule-based Fallback**: Automatic fallback when AI is unavailable
+
+### Configuration Priority
+1. **OpenAI** (if API key provided) - Best performance and reasoning
+2. **Google Gemini** (if API key provided) - Good alternative with free tier
+3. **Hugging Face** (if API key provided) - Free tier for basic features
+4. **Rule-based Fallback** (always available) - No API key required
+
+### AI Status Dashboard
+- **Real-time Status**: Shows AI processing, success, or fallback status
+- **Transparent Feedback**: Users know exactly what's happening with AI requests
+- **Fallback Indication**: Clear indication when using rule-based fallback vs AI
+- **Helpful Messages**: Guides users on what to try when AI is unavailable
+- **Visual Indicators**: Color-coded status bars with icons and badges
+
 ## 🔧 Configuration
 
 ### Environment Variables
 ```bash
+# AI Provider Keys (at least one required for AI features)
 OPENAI_API_KEY=your-openai-api-key
+GEMINI_API_KEY=your-gemini-api-key
+HUGGINGFACE_API_KEY=your-huggingface-api-key
+
+# Note: The app will automatically choose the best available AI provider
+# If no AI keys are provided, the app uses rule-based fallback systems
 ```
 
 ### Customization
@@ -292,6 +342,11 @@ OPENAI_API_KEY=your-openai-api-key
 - **Efficient Search**: AI-powered queries with fallback to rule-based search
 - **Optimized Rendering**: Virtual scrolling for large datasets
 - **Smart Caching**: Reduces API calls and improves responsiveness
+- **Graceful Fallback**: Automatic fallback to rule-based systems when AI is unavailable
+- **Multi-Provider Support**: Supports OpenAI, Google Gemini, and Hugging Face AI providers
+- **AI Response Time**: Average 2-5 seconds for AI-powered features
+- **Fallback Performance**: Rule-based systems respond in <1 second
+- **Error Recovery**: Automatic retry with different AI providers on failure
 
 ---
 

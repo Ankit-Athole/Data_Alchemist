@@ -1,7 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import OpenAI from 'openai';
+import { getAIProvider } from '@/utils/aiConfig';
+import { generateSimpleRecommendations } from '@/utils/aiRecommendations';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Only create OpenAI client if API key is available
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -9,7 +12,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { clients, workers, tasks } = req.body;
 
   try {
-    const systemPrompt = `You are an AI business rule recommendation system. Analyze the provided data and suggest relevant business rules based on patterns you observe.
+    const provider = getAIProvider();
+    let result = null;
+
+    if (provider === 'openai' && openai) {
+      const systemPrompt = `You are an AI business rule recommendation system. Analyze the provided data and suggest relevant business rules based on patterns you observe.
 
 Available datasets:
 - clients: ClientID, ClientName, PriorityLevel, RequestedTaskIDs, GroupTag, AttributesJSON
@@ -34,29 +41,31 @@ Example recommendations:
 - "Workers in group A are overloaded → Load limit rule"
 - "High priority clients request similar tasks → Precedence rule"`;
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { 
-          role: 'user', 
-          content: `Analyze this data and suggest business rules:\n\nClients: ${JSON.stringify(clients)}\nWorkers: ${JSON.stringify(workers)}\nTasks: ${JSON.stringify(tasks)}`
-        }
-      ],
-      temperature: 0.3
-    });
+             const completion = await openai.chat.completions.create({
+         model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { 
+            role: 'user', 
+            content: `Analyze this data and suggest business rules:\n\nClients: ${JSON.stringify(clients)}\nWorkers: ${JSON.stringify(workers)}\nTasks: ${JSON.stringify(tasks)}`
+          }
+        ],
+        temperature: 0.3
+      });
 
-    const response = completion.choices[0].message.content;
-    if (!response) {
-      return res.status(500).json({ error: 'No response from AI' });
+      const response = completion.choices[0].message.content;
+      if (response) {
+        result = JSON.parse(response);
+      }
+    } else {
+      // Use fallback for non-OpenAI providers
+      result = generateSimpleRecommendations(clients, workers, tasks);
     }
 
-    try {
-      const result = JSON.parse(response);
+    if (result) {
       res.status(200).json(result);
-    } catch (parseError) {
-      console.error('Failed to parse AI response:', response);
-      res.status(500).json({ error: 'Invalid response format' });
+    } else {
+      throw new Error('No AI provider available');
     }
 
   } catch (error: any) {

@@ -13,19 +13,34 @@ export default function AIErrorCorrection({ errors, clients, workers, tasks, onA
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [corrections, setCorrections] = useState<ErrorCorrection[]>([]);
   const [summary, setSummary] = useState<string>('');
+  const [aiStatus, setAiStatus] = useState<'idle' | 'loading' | 'success' | 'failed' | 'fallback'>('idle');
+  const [aiMessage, setAiMessage] = useState('');
+  const [selectedError, setSelectedError] = useState<any>(null);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [appliedFixes, setAppliedFixes] = useState<Set<number>>(new Set());
 
   const handleAnalyze = async () => {
     if (errors.length === 0) return;
     setIsAnalyzing(true);
+    setAiStatus('loading');
+    setAiMessage('Trying AI-powered error correction...');
+    
     try {
       const result = await getAIErrorCorrections(errors, clients, workers, tasks);
       if (result) {
+        setAiStatus('success');
+        setAiMessage('AI error correction successful!');
         setCorrections(result.corrections || []);
         setSummary(result.summary || '');
+      } else {
+        setAiStatus('fallback');
+        setAiMessage('AI unavailable, using rule-based fallback...');
+        // Fallback is handled in the utility function
       }
     } catch (error) {
       console.error('Error correction failed:', error);
-      alert('AI error correction failed. Using fallback suggestions. You can still fix errors manually.');
+      setAiStatus('failed');
+      setAiMessage('AI error correction failed. Using fallback suggestions. You can still fix errors manually.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -54,21 +69,107 @@ export default function AIErrorCorrection({ errors, clients, workers, tasks, onA
     const error = errors[correction.errorIndex];
     if (error && error.entity && error.row !== undefined) {
       // Extract the suggested changes from the fix
-      const changes = parseFixToChanges(correction.fix);
+      const changes = parseFixToChanges(correction.fix, error);
       if (changes) {
         onApplyFix(error.entity, error.row, changes);
+        // Mark this fix as applied
+        setAppliedFixes(prev => new Set(Array.from(prev).concat([correction.errorIndex])));
+        // Show success feedback
+        alert(`✅ Fix applied successfully!\n\nChanged: ${Object.keys(changes).join(', ')}\nRow: ${error.row + 1} in ${error.entity}`);
+      } else {
+        alert('⚠️ Could not parse the fix automatically. Please apply the fix manually.');
       }
     }
   };
 
-  const parseFixToChanges = (fix: string): any => {
-    // Simple parsing - in a real implementation, this would be more sophisticated
+  const parseFixToChanges = (fix: string, error: any): any => {
+    // Enhanced parsing for common fix patterns
     try {
-      // Look for JSON-like structures in the fix
+      // Look for JSON-like structures in the fix first
       const jsonMatch = fix.match(/\{.*\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
       }
+
+      // Handle specific error types with smart parsing
+      if (error.type === 'range' && error.field) {
+        // Handle range violations (e.g., "PriorityLevel must be 1-5")
+        if (error.field === 'PriorityLevel') {
+          return { [error.field]: 3 }; // Default to middle value
+        }
+        if (error.field === 'QualificationLevel') {
+          return { [error.field]: 3 }; // Default to middle value
+        }
+        if (error.field === 'Duration') {
+          return { [error.field]: 2 }; // Default duration
+        }
+        if (error.field === 'MaxLoadPerPhase') {
+          return { [error.field]: 2 }; // Default load
+        }
+        if (error.field === 'MaxConcurrent') {
+          return { [error.field]: 2 }; // Default concurrent
+        }
+      }
+
+      // Handle malformed JSON fields
+      if (error.type === 'malformed' && error.field) {
+        if (error.field === 'AttributesJSON') {
+          return { [error.field]: '{}' }; // Default empty JSON
+        }
+        if (error.field === 'AvailableSlots') {
+          return { [error.field]: '[1,2,3]' }; // Default slots
+        }
+        if (error.field === 'PreferredPhases') {
+          return { [error.field]: '[1,2]' }; // Default phases
+        }
+        if (error.field === 'RequestedTaskIDs') {
+          return { [error.field]: '' }; // Clear invalid references
+        }
+        if (error.field === 'RequiredSkills') {
+          return { [error.field]: '' }; // Clear invalid skills
+        }
+      }
+
+      // Handle duplicate IDs
+      if (error.type === 'duplicate' && error.field) {
+        const baseId = error.value || 'ID';
+        const timestamp = Date.now().toString().slice(-4);
+        return { [error.field]: `${baseId}_${timestamp}` };
+      }
+
+      // Handle reference errors (invalid task/worker references)
+      if (error.type === 'reference' && error.field) {
+        if (error.field === 'RequestedTaskIDs') {
+          return { [error.field]: '' }; // Clear invalid task references
+        }
+      }
+
+      // Handle coverage errors (missing skills)
+      if (error.type === 'coverage' && error.field) {
+        if (error.field === 'RequiredSkills') {
+          return { [error.field]: 'general' }; // Default skill
+        }
+      }
+
+      // Handle overload errors
+      if (error.type === 'overload' && error.field) {
+        if (error.field === 'AvailableSlots') {
+          return { [error.field]: '[1,2,3,4,5]' }; // More slots
+        }
+        if (error.field === 'MaxLoadPerPhase') {
+          return { [error.field]: 1 }; // Reduce load
+        }
+      }
+
+      // Generic fallback for field-specific fixes
+      if (error.field) {
+        // Try to extract a value from the fix text
+        const valueMatch = fix.match(/to\s+([^,\s]+)/);
+        if (valueMatch) {
+          return { [error.field]: valueMatch[1] };
+        }
+      }
+
       return null;
     } catch {
       return null;
@@ -84,6 +185,83 @@ export default function AIErrorCorrection({ errors, clients, workers, tasks, onA
       </div>
       
       <div style={{ padding: '2.5rem', background: '#fff', borderBottomLeftRadius: '2rem', borderBottomRightRadius: '2rem' }}>
+        {/* AI Status Dashboard */}
+        {aiStatus !== 'idle' && (
+          <div style={{ 
+            marginBottom: '2rem',
+            padding: '1rem 1.5rem',
+            borderRadius: '1rem',
+            background: 
+              aiStatus === 'loading' ? 'linear-gradient(90deg, #dbeafe 0%, #bfdbfe 100%)' :
+              aiStatus === 'success' ? 'linear-gradient(90deg, #dcfce7 0%, #bbf7d0 100%)' :
+              aiStatus === 'fallback' ? 'linear-gradient(90deg, #fef3c7 0%, #fde68a 100%)' :
+              'linear-gradient(90deg, #fee2e2 0%, #fecaca 100%)',
+            border: `2px solid ${
+              aiStatus === 'loading' ? '#3b82f6' :
+              aiStatus === 'success' ? '#10b981' :
+              aiStatus === 'fallback' ? '#f59e0b' :
+              '#ef4444'
+            }`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem'
+          }}>
+            <span style={{ 
+              fontSize: '1.5rem',
+              color: 
+                aiStatus === 'loading' ? '#3b82f6' :
+                aiStatus === 'success' ? '#10b981' :
+                aiStatus === 'fallback' ? '#f59e0b' :
+                '#ef4444'
+            }}>
+              {aiStatus === 'loading' ? '⏳' : aiStatus === 'success' ? '✅' : aiStatus === 'fallback' ? '🔄' : '❌'}
+            </span>
+            <div style={{ flex: 1 }}>
+              <div style={{ 
+                fontWeight: 700, 
+                fontSize: '1rem',
+                color: 
+                  aiStatus === 'loading' ? '#1e40af' :
+                  aiStatus === 'success' ? '#059669' :
+                  aiStatus === 'fallback' ? '#92400e' :
+                  '#991b1b'
+              }}>
+                {aiStatus === 'loading' ? 'AI Processing...' : 
+                 aiStatus === 'success' ? 'AI Correction Complete' : 
+                 aiStatus === 'fallback' ? 'Using Rule-Based Fallback' : 
+                 'AI Correction Failed'}
+              </div>
+              <div style={{ 
+                fontSize: '0.9rem',
+                color: 
+                  aiStatus === 'loading' ? '#1e40af' :
+                  aiStatus === 'success' ? '#059669' :
+                  aiStatus === 'fallback' ? '#92400e' :
+                  '#991b1b'
+              }}>
+                {aiMessage}
+              </div>
+            </div>
+            <span style={{ 
+              background: 
+                aiStatus === 'loading' ? '#3b82f6' :
+                aiStatus === 'success' ? '#10b981' :
+                aiStatus === 'fallback' ? '#f59e0b' :
+                '#ef4444',
+              color: 'white',
+              fontSize: '0.8rem',
+              padding: '0.25rem 0.75rem',
+              borderRadius: '9999px',
+              fontWeight: 600
+            }}>
+              {aiStatus === 'loading' ? 'LOADING' : 
+               aiStatus === 'success' ? 'AI POWERED' : 
+               aiStatus === 'fallback' ? 'RULE-BASED' : 
+               'FAILED'}
+            </span>
+          </div>
+        )}
+
         {/* Analyze Button */}
         <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
           <button
@@ -232,7 +410,13 @@ export default function AIErrorCorrection({ errors, clients, workers, tasks, onA
                         Apply Fix
                       </button>
                       <button
-                        onClick={() => {/* View error details */}}
+                        onClick={() => {
+                          const error = errors[correction.errorIndex];
+                          if (error) {
+                            setSelectedError(error);
+                            setShowErrorModal(true);
+                          }
+                        }}
                         style={{
                           padding: '0.75rem 1.5rem',
                           background: '#f3f4f6',
@@ -272,6 +456,171 @@ export default function AIErrorCorrection({ errors, clients, workers, tasks, onA
           </div>
         </div>
       </div>
+
+      {/* Error Details Modal */}
+      {showErrorModal && selectedError && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: '1rem',
+            padding: '2rem',
+            maxWidth: '600px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1.5rem',
+              paddingBottom: '1rem',
+              borderBottom: '2px solid #e5e7eb'
+            }}>
+              <h3 style={{
+                fontWeight: 700,
+                fontSize: '1.5rem',
+                color: '#374151',
+                margin: 0
+              }}>
+                Error Details
+              </h3>
+              <button
+                onClick={() => setShowErrorModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: '#6b7280',
+                  padding: '0.5rem'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h4 style={{
+                fontWeight: 600,
+                color: '#374151',
+                marginBottom: '0.5rem',
+                fontSize: '1.1rem'
+              }}>
+                Error Information:
+              </h4>
+              <div style={{
+                background: '#f9fafb',
+                borderRadius: '0.5rem',
+                padding: '1rem',
+                border: '1px solid #e5e7eb'
+              }}>
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <strong>Type:</strong> {selectedError.type || 'Unknown'}
+                </div>
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <strong>Entity:</strong> {selectedError.entity || 'Unknown'}
+                </div>
+                {selectedError.row !== undefined && (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <strong>Row:</strong> {selectedError.row + 1}
+                  </div>
+                )}
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <strong>Message:</strong> {selectedError.message || 'No message'}
+                </div>
+                {selectedError.field && (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <strong>Field:</strong> {selectedError.field}
+                  </div>
+                )}
+                {selectedError.value && (
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <strong>Value:</strong> {String(selectedError.value)}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h4 style={{
+                fontWeight: 600,
+                color: '#374151',
+                marginBottom: '0.5rem',
+                fontSize: '1.1rem'
+              }}>
+                Data Context:
+              </h4>
+              <div style={{
+                background: '#f9fafb',
+                borderRadius: '0.5rem',
+                padding: '1rem',
+                border: '1px solid #e5e7eb',
+                maxHeight: '200px',
+                overflowY: 'auto'
+              }}>
+                {selectedError.entity && selectedError.row !== undefined && (
+                  <div>
+                    <strong>Row Data:</strong>
+                    <pre style={{
+                      background: '#fff',
+                      padding: '0.5rem',
+                      borderRadius: '0.25rem',
+                      fontSize: '0.9rem',
+                      marginTop: '0.5rem',
+                      overflowX: 'auto',
+                      whiteSpace: 'pre-wrap'
+                    }}>
+                      {JSON.stringify(
+                        selectedError.entity === 'clients' ? clients[selectedError.row] :
+                        selectedError.entity === 'workers' ? workers[selectedError.row] :
+                        selectedError.entity === 'tasks' ? tasks[selectedError.row] :
+                        null, 
+                        null, 
+                        2
+                      )}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              gap: '1rem',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={() => setShowErrorModal(false)}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  background: '#f3f4f6',
+                  color: '#374151',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '0.5rem',
+                  fontWeight: 600,
+                  fontSize: '1rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

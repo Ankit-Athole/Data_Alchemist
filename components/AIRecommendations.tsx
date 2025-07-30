@@ -6,24 +6,38 @@ interface Props {
   workers: any[];
   tasks: any[];
   onAddRule: (rule: string) => void;
+  currentRulesCount?: number;
 }
 
-export default function AIRecommendations({ clients, workers, tasks, onAddRule }: Props) {
+export default function AIRecommendations({ clients, workers, tasks, onAddRule, currentRulesCount }: Props) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [recommendations, setRecommendations] = useState<RuleRecommendation[]>([]);
   const [lastAnalysis, setLastAnalysis] = useState<string>('');
+  const [aiStatus, setAiStatus] = useState<'idle' | 'loading' | 'success' | 'failed' | 'fallback'>('idle');
+  const [aiMessage, setAiMessage] = useState('');
+  const [addedRules, setAddedRules] = useState<Set<number>>(new Set());
 
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
+    setAiStatus('loading');
+    setAiMessage('Trying AI-powered analysis...');
+    
     try {
       const result = await getAIRecommendations(clients, workers, tasks);
       if (result) {
+        setAiStatus('success');
+        setAiMessage('AI analysis successful!');
         setRecommendations(result.recommendations || []);
         setLastAnalysis(result.reasoning || '');
+      } else {
+        setAiStatus('fallback');
+        setAiMessage('AI unavailable, using rule-based fallback...');
+        // Fallback is handled in the utility function
       }
     } catch (error) {
       console.error('Analysis failed:', error);
-      alert('AI recommendations failed. Using fallback analysis. You can still create rules manually.');
+      setAiStatus('failed');
+      setAiMessage('AI analysis failed. Using fallback analysis. You can still create rules manually.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -56,6 +70,83 @@ export default function AIRecommendations({ clients, workers, tasks, onAddRule }
       </div>
       
       <div style={{ padding: '2.5rem', background: '#fff', borderBottomLeftRadius: '2rem', borderBottomRightRadius: '2rem' }}>
+        {/* AI Status Dashboard */}
+        {aiStatus !== 'idle' && (
+          <div style={{ 
+            marginBottom: '2rem',
+            padding: '1rem 1.5rem',
+            borderRadius: '1rem',
+            background: 
+              aiStatus === 'loading' ? 'linear-gradient(90deg, #dbeafe 0%, #bfdbfe 100%)' :
+              aiStatus === 'success' ? 'linear-gradient(90deg, #dcfce7 0%, #bbf7d0 100%)' :
+              aiStatus === 'fallback' ? 'linear-gradient(90deg, #fef3c7 0%, #fde68a 100%)' :
+              'linear-gradient(90deg, #fee2e2 0%, #fecaca 100%)',
+            border: `2px solid ${
+              aiStatus === 'loading' ? '#3b82f6' :
+              aiStatus === 'success' ? '#10b981' :
+              aiStatus === 'fallback' ? '#f59e0b' :
+              '#ef4444'
+            }`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem'
+          }}>
+            <span style={{ 
+              fontSize: '1.5rem',
+              color: 
+                aiStatus === 'loading' ? '#3b82f6' :
+                aiStatus === 'success' ? '#10b981' :
+                aiStatus === 'fallback' ? '#f59e0b' :
+                '#ef4444'
+            }}>
+              {aiStatus === 'loading' ? '⏳' : aiStatus === 'success' ? '✅' : aiStatus === 'fallback' ? '🔄' : '❌'}
+            </span>
+            <div style={{ flex: 1 }}>
+              <div style={{ 
+                fontWeight: 700, 
+                fontSize: '1rem',
+                color: 
+                  aiStatus === 'loading' ? '#1e40af' :
+                  aiStatus === 'success' ? '#059669' :
+                  aiStatus === 'fallback' ? '#92400e' :
+                  '#991b1b'
+              }}>
+                {aiStatus === 'loading' ? 'AI Processing...' : 
+                 aiStatus === 'success' ? 'AI Analysis Complete' : 
+                 aiStatus === 'fallback' ? 'Using Rule-Based Fallback' : 
+                 'AI Analysis Failed'}
+              </div>
+              <div style={{ 
+                fontSize: '0.9rem',
+                color: 
+                  aiStatus === 'loading' ? '#1e40af' :
+                  aiStatus === 'success' ? '#059669' :
+                  aiStatus === 'fallback' ? '#92400e' :
+                  '#991b1b'
+              }}>
+                {aiMessage}
+              </div>
+            </div>
+            <span style={{ 
+              background: 
+                aiStatus === 'loading' ? '#3b82f6' :
+                aiStatus === 'success' ? '#10b981' :
+                aiStatus === 'fallback' ? '#f59e0b' :
+                '#ef4444',
+              color: 'white',
+              fontSize: '0.8rem',
+              padding: '0.25rem 0.75rem',
+              borderRadius: '9999px',
+              fontWeight: 600
+            }}>
+              {aiStatus === 'loading' ? 'LOADING' : 
+               aiStatus === 'success' ? 'AI POWERED' : 
+               aiStatus === 'fallback' ? 'RULE-BASED' : 
+               'FAILED'}
+            </span>
+          </div>
+        )}
+
         {/* Analyze Button */}
         <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
           <button
@@ -91,6 +182,11 @@ export default function AIRecommendations({ clients, workers, tasks, onAddRule }
               </>
             )}
           </button>
+          {currentRulesCount !== undefined && (
+            <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#6b7280' }}>
+              Current rules: {currentRulesCount} | AI-recommended rules will be added to your configuration
+            </div>
+          )}
         </div>
 
         {/* Analysis Results */}
@@ -166,24 +262,34 @@ export default function AIRecommendations({ clients, workers, tasks, onAddRule }
                     </div>
                     
                     <button
-                      onClick={() => onAddRule(rec.rule)}
+                      onClick={() => {
+                        console.log('Add to Rules clicked for:', rec.rule);
+                        onAddRule(rec.rule);
+                        setAddedRules(prev => new Set(Array.from(prev).concat([index])));
+                      }}
+                      disabled={addedRules.has(index)}
                       style={{
                         padding: '0.75rem 1.5rem',
-                        background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)',
+                        background: addedRules.has(index) 
+                          ? 'linear-gradient(90deg, #6b7280 0%, #4b5563 100%)'
+                          : 'linear-gradient(90deg, #10b981 0%, #059669 100%)',
                         color: 'white',
                         border: 'none',
                         borderRadius: '0.5rem',
                         fontWeight: 600,
                         fontSize: '1rem',
-                        cursor: 'pointer',
+                        cursor: addedRules.has(index) ? 'not-allowed' : 'pointer',
+                        opacity: addedRules.has(index) ? 0.6 : 1,
                         boxShadow: '0 2px 4px 0 rgba(16,185,129,0.1)',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '0.5rem'
                       }}
                     >
-                      <span style={{ fontSize: '1.25rem' }}>➕</span>
-                      Add to Rules
+                      <span style={{ fontSize: '1.25rem' }}>
+                        {addedRules.has(index) ? '✅' : '➕'}
+                      </span>
+                      {addedRules.has(index) ? 'Added to Rules' : 'Add to Rules'}
                     </button>
                   </div>
                 </div>

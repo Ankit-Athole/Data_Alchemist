@@ -13,29 +13,49 @@ export default function SearchPanel({ clients, workers, tasks, onSearchResult }:
   const [isSearching, setIsSearching] = useState(false);
   const [lastResult, setLastResult] = useState<SearchResult | null>(null);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [aiStatus, setAiStatus] = useState<'idle' | 'loading' | 'success' | 'failed' | 'fallback'>('idle');
+  const [aiMessage, setAiMessage] = useState('');
 
   const handleSearch = async () => {
     if (!query.trim()) return;
     setIsSearching(true);
+    setAiStatus('loading');
+    setAiMessage('Trying AI-powered search...');
     setSearchHistory(prev => [query, ...prev.slice(0, 4)]); // Keep last 5 searches
+    
     try {
       let result = await searchDataWithNLP(query, clients, workers, tasks);
-      if (!result) {
-        result = simpleSearch(query, clients, workers, tasks);
-      }
+      
       if (result) {
+        setAiStatus('success');
+        setAiMessage('AI search successful!');
         setLastResult(result);
         onSearchResult?.(result);
       } else {
-        setLastResult({
-          entity: 'tasks',
-          data: [],
-          query,
-          explanation: 'No results found for your query'
-        });
+        // AI failed, try fallback
+        setAiStatus('fallback');
+        setAiMessage('AI unavailable, using rule-based fallback...');
+        result = simpleSearch(query, clients, workers, tasks);
+        
+        if (result) {
+          setAiMessage('Fallback search successful!');
+          setLastResult(result);
+          onSearchResult?.(result);
+        } else {
+          setAiStatus('failed');
+          setAiMessage('Both AI and fallback failed. Try a different query.');
+          setLastResult({
+            entity: 'tasks',
+            data: [],
+            query,
+            explanation: 'No results found for your query'
+          });
+        }
       }
     } catch (error) {
       console.error('Search error:', error);
+      setAiStatus('failed');
+      setAiMessage('Search failed. Using fallback search. Try queries like "high priority clients" or "workers with frontend skills".');
       setLastResult({
         entity: 'tasks',
         data: [],
@@ -209,6 +229,73 @@ export default function SearchPanel({ clients, workers, tasks, onSearchResult }:
           </div>
         )}
 
+        {/* AI Status */}
+        {aiStatus !== 'idle' && (
+          <div style={{ 
+            marginBottom: '1.5rem',
+            padding: '1rem 1.5rem',
+            borderRadius: '1rem',
+            background: aiStatus === 'loading' ? 'linear-gradient(90deg, #fef3c7 0%, #fde68a 100%)' :
+                       aiStatus === 'success' ? 'linear-gradient(90deg, #d1fae5 0%, #a7f3d0 100%)' :
+                       aiStatus === 'fallback' ? 'linear-gradient(90deg, #dbeafe 0%, #bfdbfe 100%)' :
+                       'linear-gradient(90deg, #fee2e2 0%, #fecaca 100%)',
+            border: aiStatus === 'loading' ? '2px solid #f59e0b' :
+                   aiStatus === 'success' ? '2px solid #10b981' :
+                   aiStatus === 'fallback' ? '2px solid #3b82f6' :
+                   '2px solid #ef4444',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem'
+          }}>
+            <span style={{ 
+              fontSize: '1.5rem',
+              opacity: aiStatus === 'loading' ? 0.8 : 1
+            }}>
+              {aiStatus === 'loading' ? '⏳' :
+               aiStatus === 'success' ? '✅' :
+               aiStatus === 'fallback' ? '🔄' :
+               '❌'}
+            </span>
+            <div style={{ flex: 1 }}>
+              <div style={{ 
+                fontWeight: 700, 
+                fontSize: '1.1rem',
+                color: aiStatus === 'loading' ? '#92400e' :
+                       aiStatus === 'success' ? '#065f46' :
+                       aiStatus === 'fallback' ? '#1e40af' :
+                       '#991b1b',
+                marginBottom: '0.25rem'
+              }}>
+                {aiStatus === 'loading' ? 'AI Processing...' :
+                 aiStatus === 'success' ? 'AI Search Successful' :
+                 aiStatus === 'fallback' ? 'Using Fallback Search' :
+                 'Search Failed'}
+              </div>
+              <div style={{ 
+                fontSize: '0.95rem',
+                color: aiStatus === 'loading' ? '#a16207' :
+                       aiStatus === 'success' ? '#047857' :
+                       aiStatus === 'fallback' ? '#1d4ed8' :
+                       '#dc2626'
+              }}>
+                {aiMessage}
+              </div>
+            </div>
+            {aiStatus === 'fallback' && (
+              <div style={{
+                background: 'rgba(59, 130, 246, 0.1)',
+                color: '#1e40af',
+                padding: '0.5rem 1rem',
+                borderRadius: '0.5rem',
+                fontSize: '0.85rem',
+                fontWeight: 600
+              }}>
+                Rule-Based
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Search Results */}
         {lastResult && (
           <div style={{ background: '#fff', borderRadius: '1rem', border: '2px solid #e5e7eb', boxShadow: '0 4px 16px 0 rgba(31,41,55,0.06)', marginBottom: '2rem', overflow: 'hidden' }}>
@@ -223,7 +310,16 @@ export default function SearchPanel({ clients, workers, tasks, onSearchResult }:
                   <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.95rem', margin: 0 }}>{lastResult.explanation}</p>
                 </div>
               </div>
-              <span style={{ background: 'rgba(255,255,255,0.18)', color: 'white', fontSize: '0.95rem', padding: '0.5rem 1rem', borderRadius: '9999px', fontWeight: 600 }}>AI Powered</span>
+              <span style={{ 
+                background: aiStatus === 'fallback' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.18)', 
+                color: 'white', 
+                fontSize: '0.95rem', 
+                padding: '0.5rem 1rem', 
+                borderRadius: '9999px', 
+                fontWeight: 600 
+              }}>
+                {aiStatus === 'fallback' ? 'Rule-Based' : 'AI Powered'}
+              </span>
             </div>
             {lastResult.data.length > 0 ? (
               <div style={{ maxHeight: 320, overflowY: 'auto' }}>

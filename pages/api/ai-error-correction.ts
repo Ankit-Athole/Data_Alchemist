@@ -1,7 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import OpenAI from 'openai';
+import { getAIProvider } from '@/utils/aiConfig';
+import { generateSimpleErrorCorrections } from '@/utils/aiErrorCorrection';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Only create OpenAI client if API key is available
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -13,7 +16,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const systemPrompt = `You are an AI error correction assistant. Given validation errors and the current data, suggest specific fixes for each error.
+    const provider = getAIProvider();
+    let result = null;
+
+    if (provider === 'openai' && openai) {
+      const systemPrompt = `You are an AI error correction assistant. Given validation errors and the current data, suggest specific fixes for each error.
 
 Available datasets:
 - clients: ClientID, ClientName, PriorityLevel, RequestedTaskIDs, GroupTag, AttributesJSON
@@ -33,29 +40,31 @@ Common error types and fixes:
 - Format errors: Suggest correct format
 - Coverage gaps: Suggest missing skills or workers`;
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { 
-          role: 'user', 
-          content: `Errors: ${JSON.stringify(errors)}\n\nData:\nClients: ${JSON.stringify(clients)}\nWorkers: ${JSON.stringify(workers)}\nTasks: ${JSON.stringify(tasks)}`
-        }
-      ],
-      temperature: 0.1
-    });
+             const completion = await openai.chat.completions.create({
+         model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { 
+            role: 'user', 
+            content: `Errors: ${JSON.stringify(errors)}\n\nData:\nClients: ${JSON.stringify(clients)}\nWorkers: ${JSON.stringify(workers)}\nTasks: ${JSON.stringify(tasks)}`
+          }
+        ],
+        temperature: 0.1
+      });
 
-    const response = completion.choices[0].message.content;
-    if (!response) {
-      return res.status(500).json({ error: 'No response from AI' });
+      const response = completion.choices[0].message.content;
+      if (response) {
+        result = JSON.parse(response);
+      }
+    } else {
+      // Use fallback for non-OpenAI providers
+      result = generateSimpleErrorCorrections(errors, clients, workers, tasks);
     }
 
-    try {
-      const result = JSON.parse(response);
+    if (result) {
       res.status(200).json(result);
-    } catch (parseError) {
-      console.error('Failed to parse AI response:', response);
-      res.status(500).json({ error: 'Invalid response format' });
+    } else {
+      throw new Error('No AI provider available');
     }
 
   } catch (error: any) {

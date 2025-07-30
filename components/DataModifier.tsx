@@ -15,19 +15,31 @@ export default function DataModifier({ clients, workers, tasks, setClients, setW
   const [isModifying, setIsModifying] = useState(false);
   const [lastResult, setLastResult] = useState<ModificationResult | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [aiStatus, setAiStatus] = useState<'idle' | 'loading' | 'success' | 'failed' | 'fallback'>('idle');
+  const [aiMessage, setAiMessage] = useState('');
 
   const handleModify = async () => {
     if (!command.trim()) return;
     setIsModifying(true);
+    setAiStatus('loading');
+    setAiMessage('Trying AI-powered modification...');
     
     try {
       const result = await modifyDataWithNLP(command, clients, workers, tasks);
       if (result) {
+        setAiStatus('success');
+        setAiMessage('AI modification successful!');
         setLastResult(result);
         setShowPreview(true);
+      } else {
+        setAiStatus('fallback');
+        setAiMessage('AI unavailable, using rule-based fallback...');
+        // Fallback is handled in the utility function
       }
     } catch (error) {
       console.error('Modification failed:', error);
+      setAiStatus('failed');
+      setAiMessage('AI modification failed. Using fallback modification.');
     } finally {
       setIsModifying(false);
     }
@@ -72,6 +84,83 @@ export default function DataModifier({ clients, workers, tasks, setClients, setW
       </div>
       
       <div style={{ padding: '2.5rem', background: '#fff', borderBottomLeftRadius: '2rem', borderBottomRightRadius: '2rem' }}>
+        {/* AI Status Dashboard */}
+        {aiStatus !== 'idle' && (
+          <div style={{ 
+            marginBottom: '2rem',
+            padding: '1rem 1.5rem',
+            borderRadius: '1rem',
+            background: 
+              aiStatus === 'loading' ? 'linear-gradient(90deg, #dbeafe 0%, #bfdbfe 100%)' :
+              aiStatus === 'success' ? 'linear-gradient(90deg, #dcfce7 0%, #bbf7d0 100%)' :
+              aiStatus === 'fallback' ? 'linear-gradient(90deg, #fef3c7 0%, #fde68a 100%)' :
+              'linear-gradient(90deg, #fee2e2 0%, #fecaca 100%)',
+            border: `2px solid ${
+              aiStatus === 'loading' ? '#3b82f6' :
+              aiStatus === 'success' ? '#10b981' :
+              aiStatus === 'fallback' ? '#f59e0b' :
+              '#ef4444'
+            }`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '1rem'
+          }}>
+            <span style={{ 
+              fontSize: '1.5rem',
+              color: 
+                aiStatus === 'loading' ? '#3b82f6' :
+                aiStatus === 'success' ? '#10b981' :
+                aiStatus === 'fallback' ? '#f59e0b' :
+                '#ef4444'
+            }}>
+              {aiStatus === 'loading' ? '⏳' : aiStatus === 'success' ? '✅' : aiStatus === 'fallback' ? '🔄' : '❌'}
+            </span>
+            <div style={{ flex: 1 }}>
+              <div style={{ 
+                fontWeight: 700, 
+                fontSize: '1rem',
+                color: 
+                  aiStatus === 'loading' ? '#1e40af' :
+                  aiStatus === 'success' ? '#059669' :
+                  aiStatus === 'fallback' ? '#92400e' :
+                  '#991b1b'
+              }}>
+                {aiStatus === 'loading' ? 'AI Processing...' : 
+                 aiStatus === 'success' ? 'AI Modification Complete' : 
+                 aiStatus === 'fallback' ? 'Using Rule-Based Fallback' : 
+                 'AI Modification Failed'}
+              </div>
+              <div style={{ 
+                fontSize: '0.9rem',
+                color: 
+                  aiStatus === 'loading' ? '#1e40af' :
+                  aiStatus === 'success' ? '#059669' :
+                  aiStatus === 'fallback' ? '#92400e' :
+                  '#991b1b'
+              }}>
+                {aiMessage}
+              </div>
+            </div>
+            <span style={{ 
+              background: 
+                aiStatus === 'loading' ? '#3b82f6' :
+                aiStatus === 'success' ? '#10b981' :
+                aiStatus === 'fallback' ? '#f59e0b' :
+                '#ef4444',
+              color: 'white',
+              fontSize: '0.8rem',
+              padding: '0.25rem 0.75rem',
+              borderRadius: '9999px',
+              fontWeight: 600
+            }}>
+              {aiStatus === 'loading' ? 'LOADING' : 
+               aiStatus === 'success' ? 'AI POWERED' : 
+               aiStatus === 'fallback' ? 'RULE-BASED' : 
+               'FAILED'}
+            </span>
+          </div>
+        )}
+
         {/* Command Input */}
         <div style={{ marginBottom: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
@@ -174,7 +263,16 @@ export default function DataModifier({ clients, workers, tasks, setClients, setW
                   <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.95rem', margin: 0 }}>{lastResult.explanation}</p>
                 </div>
               </div>
-              <span style={{ background: 'rgba(255,255,255,0.18)', color: 'white', fontSize: '0.95rem', padding: '0.5rem 1rem', borderRadius: '9999px', fontWeight: 600 }}>AI Powered</span>
+              <span style={{ 
+                background: aiStatus === 'success' ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.3)', 
+                color: 'white', 
+                fontSize: '0.95rem', 
+                padding: '0.5rem 1rem', 
+                borderRadius: '9999px', 
+                fontWeight: 600 
+              }}>
+                {aiStatus === 'success' ? 'AI POWERED' : aiStatus === 'fallback' ? 'RULE-BASED' : 'AI FAILED'}
+              </span>
             </div>
             
             <div style={{ padding: '1.5rem 2rem' }}>
